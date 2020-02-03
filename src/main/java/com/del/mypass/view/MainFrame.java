@@ -121,14 +121,7 @@ public class MainFrame extends JFrame implements ActionListener {
             @Override
             public void mouseClicked(MouseEvent evt) {
                 if (evt.getClickCount() == 2) {
-                    Position p = list.getSelectedValue();
-                    String pass = "VeryFunny";
-                    try {
-                        pass = Utils.decodePass(p.getCode(), secretLocator.read());
-                    } catch (Exception e) {
-                        Utils.getLogger().error(e.getMessage(), e);
-                    }
-                    StringSelection stringSelection = new StringSelection(pass);
+                    StringSelection stringSelection = new StringSelection(passwordGenerator.generate(16));
                     Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
                     clipboard.setContents(stringSelection, null);
                 }
@@ -164,13 +157,44 @@ public class MainFrame extends JFrame implements ActionListener {
         });
 
         list.getInputMap().put(KeyStroke.getKeyStroke("alt shift E"), "enterKey");
+        list.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift E"), "showKey");
+        list.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift P"), "manualPath");
+        list.getInputMap().put(KeyStroke.getKeyStroke("ctrl shift C"), "copyKey");
         list.getInputMap().put(KeyStroke.getKeyStroke("DELETE"), "delete");
 
+        list.getActionMap().put("manualPath", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent ae) {
+                String value = JOptionPane.showInputDialog(_this, "Enter path", secretLocator.getPath(), JOptionPane.PLAIN_MESSAGE);
+                if (value != null) secretLocator.setManualPath(value);
+            }
+        });
+        list.getActionMap().put("showKey", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent ae) {
+                JOptionPane.showMessageDialog(_this, secretLocator.read(), "My code", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
         list.getActionMap().put("enterKey", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent ae) {
                 String value = JOptionPane.showInputDialog(_this, "Enter code", "");
                 if (value != null) secretLocator.setPrivateKey(value);
+            }
+        });
+        list.getActionMap().put("copyKey", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent ae) {
+                Position p = list.getSelectedValue();
+                String pass = "VeryFunny";
+                try {
+                    pass = Utils.decodePass(p.getCode(), secretLocator.read());
+                } catch (Exception e) {
+                    Utils.getLogger().error(e.getMessage(), e);
+                }
+                StringSelection stringSelection = new StringSelection(pass);
+                Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+                clipboard.setContents(stringSelection, null);
             }
         });
         list.getActionMap().put("delete", new AbstractAction() {

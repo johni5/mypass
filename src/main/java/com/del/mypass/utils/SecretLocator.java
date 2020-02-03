@@ -13,6 +13,7 @@ public class SecretLocator {
 
     private String privateKey;
     private Cache<String, String> fileCache;
+    private String manualPath;
 
     public SecretLocator() {
         fileCache = CacheBuilder.newBuilder().expireAfterWrite(5, TimeUnit.MINUTES).build();
@@ -22,15 +23,27 @@ public class SecretLocator {
         return Utils.nvl(loadSystemKey(), "") + "_" + Utils.nvl(getPrivateKey(), "");
     }
 
-    private String loadSystemKey() {
-        String fName;
-        if (isLinux()) {
-            fName = System.getProperty("user.home") + LINUX_PATH;
-        } else if (isWindows()) {
-            fName = System.getProperty("user.home") + WIN32_PATH;
-        } else {
-            return "";
+    public String getManualPath() {
+        return manualPath;
+    }
+
+    public String getPath() {
+        if (StringUtil.isTrimmedEmpty(manualPath)) {
+            if (isLinux()) {
+                return System.getProperty("user.home") + LINUX_PATH;
+            } else if (isWindows()) {
+                return System.getProperty("user.home") + WIN32_PATH;
+            }
         }
+        return manualPath;
+    }
+
+    public void setManualPath(String manualPath) {
+        this.manualPath = manualPath;
+    }
+
+    private String loadSystemKey() {
+        String fName = getPath();
         try {
             return fileCache.get(fName, () -> {
                 File f = new File(fName);
