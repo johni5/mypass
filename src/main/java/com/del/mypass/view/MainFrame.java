@@ -28,11 +28,10 @@ public class MainFrame extends JFrame implements ActionListener {
     private JTextField filter;
     private JList<Position> list;
 
-
     public MainFrame() {
         setTitle("Готов к работе");
         final JFrame _this = this;
-        timer = new Timer((int) TimeUnit.MILLISECONDS.toMillis(500), this);
+        timer = new Timer(300, this);
         timer.setRepeats(false);
         addWindowListener(new MainFrameActions(this));
         setIconImage(Toolkit.getDefaultToolkit().getImage(this.getClass().getResource("/img/ico_32x32.png")));
@@ -165,7 +164,7 @@ public class MainFrame extends JFrame implements ActionListener {
         list.getActionMap().put("manualPath", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent ae) {
-                String value = JOptionPane.showInputDialog(_this, "Enter path", secretLocator.getPath(), JOptionPane.PLAIN_MESSAGE);
+                String value = JOptionPane.showInputDialog(_this, "Enter path", secretLocator.getPath());
                 if (value != null) secretLocator.setManualPath(value);
             }
         });
@@ -178,7 +177,7 @@ public class MainFrame extends JFrame implements ActionListener {
         list.getActionMap().put("enterKey", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent ae) {
-                String value = JOptionPane.showInputDialog(_this, "Enter code", "");
+                String value = JOptionPane.showInputDialog(_this, "Enter code", secretLocator.getPrivateKey());
                 if (value != null) secretLocator.setPrivateKey(value);
             }
         });
@@ -189,9 +188,12 @@ public class MainFrame extends JFrame implements ActionListener {
                 String pass = "VeryFunny";
                 try {
                     pass = Utils.decodePass(p.getCode(), secretLocator.read());
+                    list.setBackground(Color.GREEN);
                 } catch (Exception e) {
                     Utils.getLogger().error(e.getMessage(), e);
+                    list.setBackground(Color.RED);
                 }
+                timer.start();
                 StringSelection stringSelection = new StringSelection(pass);
                 Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
                 clipboard.setContents(stringSelection, null);
@@ -222,6 +224,7 @@ public class MainFrame extends JFrame implements ActionListener {
 
     private void initList() {
         try {
+            list.setBackground(Color.WHITE);
             List<Position> positions = ServiceManager.getInstance().allPositions(filter.getText());
             DefaultListModel<Position> listModel = new DefaultListModel<>();
             positions.forEach(listModel::addElement);

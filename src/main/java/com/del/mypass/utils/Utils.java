@@ -10,6 +10,7 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.ResourceBundle;
 
@@ -33,7 +34,7 @@ public class Utils {
 
     public static String encodePass(String p, String _key) throws InvalidAlgorithmParameterException, InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, UnsupportedEncodingException, BadPaddingException, IllegalBlockSizeException {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
-        byte[] digestOfPassword = md.digest(_key.getBytes("utf-8"));
+        byte[] digestOfPassword = Arrays.copyOf(md.digest(_key.getBytes("utf-8")), 16);
         SecretKey key = new SecretKeySpec(digestOfPassword, "AES");
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
         IvParameterSpec iv = new IvParameterSpec(new byte[16]);
@@ -44,7 +45,7 @@ public class Utils {
 
     public static String decodePass(String p, String _key) throws InvalidAlgorithmParameterException, InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, UnsupportedEncodingException, BadPaddingException, IllegalBlockSizeException {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
-        byte[] digestOfPassword = md.digest(_key.getBytes("utf-8"));
+        byte[] digestOfPassword = Arrays.copyOf(md.digest(_key.getBytes("utf-8")), 16);
         SecretKey key = new SecretKeySpec(digestOfPassword, "AES");
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
         IvParameterSpec iv = new IvParameterSpec(new byte[16]);
