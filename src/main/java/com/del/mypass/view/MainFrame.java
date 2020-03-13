@@ -5,16 +5,23 @@ import com.del.mypass.actions.MainFrameActions;
 import com.del.mypass.dao.ServiceManager;
 import com.del.mypass.db.Position;
 import com.del.mypass.utils.*;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
+import java.util.Map;
 
 /**
  * Created by DodolinEL
@@ -120,9 +127,7 @@ public class MainFrame extends JFrame implements ActionListener {
             @Override
             public void mouseClicked(MouseEvent evt) {
                 if (evt.getClickCount() == 2) {
-                    StringSelection stringSelection = new StringSelection(passwordGenerator.generate(16));
-                    Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-                    clipboard.setContents(stringSelection, null);
+                    name.setText(list.getSelectedValue().getName());
                 }
             }
         });
@@ -131,10 +136,16 @@ public class MainFrame extends JFrame implements ActionListener {
         add.addActionListener(ev -> {
             if (!StringUtil.isTrimmedEmpty(name.getText()) && !StringUtil.isTrimmedEmpty(code.getText())) {
                 try {
-                    Position p = new Position();
-                    p.setName(name.getText());
-                    p.setCode(Utils.encodePass(code.getText(), secretLocator.read()));
-                    ServiceManager.getInstance().createPosition(p);
+                    Position p = ServiceManager.getInstance().findPosition(name.getText());
+                    if (p == null) {
+                        p = new Position();
+                        p.setName(name.getText());
+                        p.setCode(Utils.encodePass(code.getText(), secretLocator.read()));
+                        ServiceManager.getInstance().createPosition(p);
+                    } else {
+                        p.setCode(Utils.encodePass(code.getText(), secretLocator.read()));
+                        ServiceManager.getInstance().updatePosition(p);
+                    }
                     initList();
                     name.setText("");
                     code.setText("");
@@ -159,8 +170,60 @@ public class MainFrame extends JFrame implements ActionListener {
         list.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift E"), "showKey");
         list.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift P"), "manualPath");
         list.getInputMap().put(KeyStroke.getKeyStroke("ctrl shift C"), "copyKey");
+        list.getInputMap().put(KeyStroke.getKeyStroke("ctrl shift Q"), "showQR");
         list.getInputMap().put(KeyStroke.getKeyStroke("DELETE"), "delete");
 
+        list.getActionMap().put("showQR", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent ae) {
+                Position p = list.getSelectedValue();
+                if (p == null) return;
+                Map<EncodeHintType, Object> hintMap = new EnumMap<>(EncodeHintType.class);
+                hintMap.put(EncodeHintType.CHARACTER_SET, "UTF-8");
+
+                // Now with zxing version 3.2.1 you could change border size (white border size to just 1)
+                hintMap.put(EncodeHintType.MARGIN, 1); /* default = 4 */
+                hintMap.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.L);
+
+                QRCodeWriter qrCodeWriter = new QRCodeWriter();
+                try {
+                    String pass = Utils.decodePass(p.getCode(), secretLocator.read());
+                    BitMatrix byteMatrix = qrCodeWriter.encode(pass, BarcodeFormat.QR_CODE, 200, 200, hintMap);
+                    int CrunchifyWidth = byteMatrix.getWidth();
+                    BufferedImage image = new BufferedImage(CrunchifyWidth, CrunchifyWidth, BufferedImage.TYPE_INT_RGB);
+                    image.createGraphics();
+
+                    Graphics2D graphics = (Graphics2D) image.getGraphics();
+                    graphics.setColor(Color.WHITE);
+                    graphics.fillRect(0, 0, CrunchifyWidth, CrunchifyWidth);
+                    graphics.setColor(Color.BLACK);
+
+                    for (int i = 0; i < CrunchifyWidth; i++) {
+                        for (int j = 0; j < CrunchifyWidth; j++) {
+                            if (byteMatrix.get(i, j)) {
+                                graphics.fillRect(i, j, 1, 1);
+                            }
+                        }
+                    }
+
+                    JLabel imgLabel = new JLabel();
+                    imgLabel.setPreferredSize(new Dimension(200, 200));
+                    ImageIcon ii = new ImageIcon();
+                    ii.setImage(image);
+                    imgLabel.setIcon(ii);
+
+                    JDialog jd = new JDialog(_this, "QR Code", true);
+                    jd.setLocationRelativeTo(_this);
+                    jd.getContentPane().add(imgLabel);
+                    jd.pack();
+                    jd.setVisible(true);
+
+                } catch (Exception e) {
+                    Utils.getLogger().error(e.getMessage(), e);
+                }
+
+            }
+        });
         list.getActionMap().put("manualPath", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent ae) {

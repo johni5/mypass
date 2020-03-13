@@ -22,4 +22,15 @@ public class PositionDAO extends AbstractDAO<Position, Long> {
         return Unchecked.cast(manager().createQuery("from Position ").getResultList());
     }
 
+    public Position find(String name) {
+        List<Position> list = Unchecked.cast(manager().
+                createQuery("from Position p where lower(p.name) like lower(:f) ")
+                .setParameter("f", name)
+                .getResultList());
+        if (list.size() > 1) throw new IllegalArgumentException("Нарушение уникальности по имени: " + name);
+        if (list.size() == 0) return null;
+        return list.iterator().next();
+
+    }
+
 }

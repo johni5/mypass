@@ -84,6 +84,10 @@ public class ServiceManager implements EntityManagerProvider {
         return getProvider().getPositionDAO().findAll(text);
     }
 
+    public Position findPosition(String name) throws CommonException {
+        return getProvider().getPositionDAO().find(name);
+    }
+
     /*OTHER*/
 
     public void backupData(String path, String pwd) {
