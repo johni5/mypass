@@ -41,7 +41,7 @@ public class MainFrame extends JFrame implements ActionListener {
         timer = new Timer(300, this);
         timer.setRepeats(false);
         addWindowListener(new MainFrameActions(this));
-        setIconImage(Toolkit.getDefaultToolkit().getImage(this.getClass().getResource("/img/ico_32x32.png")));
+        setIconImage(Toolkit.getDefaultToolkit().getImage(this.getClass().getResource("/img/ico_64x64.png")));
         setResizable(false);
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         passwordGenerator = new PasswordGenerator.PasswordGeneratorBuilder()
@@ -280,9 +280,18 @@ public class MainFrame extends JFrame implements ActionListener {
             }
         });
 
-        initList();
+        firstInitList();
         setLocale(new Locale("RU"));
         pack();
+    }
+
+    private void firstInitList() {
+        list.setEnabled(false);
+        Thread t = new Thread(() -> {
+            initList();
+            list.setEnabled(true);
+        });
+        t.start();
     }
 
     private void initList() {
