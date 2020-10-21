@@ -1,5 +1,7 @@
 package com.del.mypass.db;
 
+import com.del.mypass.utils.Utils;
+
 import javax.persistence.*;
 import java.io.Serializable;
 
@@ -22,6 +24,10 @@ public class Position implements Serializable {
     @Basic
     @Column(name = "CODE", nullable = false)
     private String code;
+
+    @Basic
+    @Column(name = "CATEGORY")
+    private String category;
 
     public Long getId() {
         return id;
@@ -47,8 +53,17 @@ public class Position implements Serializable {
         this.code = code;
     }
 
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
     @Override
     public String toString() {
+//        return String.format("[%s] %s -> %s", id, Utils.nvl(category, "-"), name);
         return name;
     }
 }

@@ -15,11 +15,11 @@ public class PositionDAO extends AbstractDAO<Position, Long> {
     public List<Position> findAll(String filter) {
         if (!StringUtil.isTrimmedEmpty(filter)) {
             return Unchecked.cast(manager().
-                    createQuery("from Position p where lower(p.name) like lower(:f) ")
+                    createQuery("from Position p where lower(p.name) like lower(:f) order by p.id ")
                     .setParameter("f", StringUtil.wrapIfNotEmpty(filter, "%"))
                     .getResultList());
         }
-        return Unchecked.cast(manager().createQuery("from Position ").getResultList());
+        return Unchecked.cast(manager().createQuery("from Position p order by p.id ").getResultList());
     }
 
     public Position find(String name) {
