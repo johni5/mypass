@@ -1,7 +1,7 @@
-package com.del.mypass.view;
+package com.del.mypass;
 
+import com.del.mypass.view.MainFrame;
 import org.apache.log4j.Logger;
-import sun.awt.X11.XToolkit;
 
 import javax.swing.*;
 
@@ -14,8 +14,6 @@ public class Launcher {
 
     final static Logger logger = Logger.getLogger(Launcher.class);
 
-    public static MainFrame mainFrame;
-
     public static void main(String[] args) {
 
         SwingUtilities.invokeLater(() -> {
@@ -26,7 +24,7 @@ public class Launcher {
                 logger.error(e.getMessage(), e);
             }
             JFrame.setDefaultLookAndFeelDecorated(true);
-            mainFrame = new MainFrame();
+            MainFrame mainFrame = new MainFrame();
             mainFrame.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
             mainFrame.setVisible(true);
         });

@@ -62,11 +62,11 @@ public class MainFrame extends JFrame implements ActionListener {
         menuItemBackup.addActionListener(actionEvent -> {
             JFileChooser fc = new JFileChooser();
             fc.setMultiSelectionEnabled(false);
-            int result = fc.showSaveDialog(Launcher.mainFrame);
+            int result = fc.showSaveDialog(_this);
             if (JFileChooser.APPROVE_OPTION == result) {
                 File selectedFile = fc.getSelectedFile();
                 try {
-                    String pwd = JOptionPane.showInputDialog(Launcher.mainFrame, "Задайте пароль", "Резервная копия базы данных", JOptionPane.QUESTION_MESSAGE);
+                    String pwd = JOptionPane.showInputDialog(_this, "Задайте пароль", "Резервная копия базы данных", JOptionPane.QUESTION_MESSAGE);
                     if (!StringUtil.isTrimmedEmpty(pwd)) {
                         ServiceManager.getInstance().backupData(selectedFile.getCanonicalPath(), pwd);
                     }
@@ -78,11 +78,11 @@ public class MainFrame extends JFrame implements ActionListener {
         menuItemRestore.addActionListener(actionEvent -> {
             JFileChooser fc = new JFileChooser();
             fc.setMultiSelectionEnabled(false);
-            int result = fc.showOpenDialog(Launcher.mainFrame);
+            int result = fc.showOpenDialog(_this);
             if (JFileChooser.APPROVE_OPTION == result) {
                 File selectedFile = fc.getSelectedFile();
                 try {
-                    String pwd = JOptionPane.showInputDialog(Launcher.mainFrame, "Введите пароль", "Восстановление базы данных", JOptionPane.QUESTION_MESSAGE);
+                    String pwd = JOptionPane.showInputDialog(_this, "Введите пароль", "Восстановление базы данных", JOptionPane.QUESTION_MESSAGE);
                     if (!StringUtil.isTrimmedEmpty(pwd)) {
                         ServiceManager.getInstance().restoreData(selectedFile.getCanonicalPath(), pwd);
                         initList();
