@@ -122,11 +122,14 @@ public class MainFrame extends JFrame implements ActionListener {
         setStyle(add, 14.0f, 3, 30, 30);
         JButton gen = new JButton(getImage("/img/sync.png", wh, wh));
         setStyle(gen, 14.0f, 3, 30, 30);
+        JButton del = new JButton(getImage("/img/del.png", wh, wh));
+        setStyle(del, 14.0f, 3, 30, 30);
         editPanel.add(name);
         editPanel.add(new JLabel(":"));
         editPanel.add(code);
         editPanel.add(add);
         editPanel.add(gen);
+        editPanel.add(del);
 
         getContentPane().add(filterPanel, BorderLayout.NORTH);
         getContentPane().add(tabbedPane, BorderLayout.CENTER);
@@ -176,6 +179,12 @@ public class MainFrame extends JFrame implements ActionListener {
         });
         gen.addActionListener(ev -> {
             code.setText(passwordGenerator.generate(16));
+        });
+        del.addActionListener(ev -> {
+            code.setText("");
+            filter.setText("");
+            name.setText("");
+            timer.start();
         });
 
         filter.addKeyListener(new KeyAdapter() {
