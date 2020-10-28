@@ -51,7 +51,7 @@ public class AppTest {
                     .useUpper(true)
                     .usePunctuation(true)
                     .build();
-            String password = passwordGenerator.generate(16);
+            String password = passwordGenerator.generate();
             System.out.println(password);
 
             if (1 == 1) return;

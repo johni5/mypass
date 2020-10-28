@@ -13,6 +13,7 @@ public final class PasswordGenerator {
     private boolean useUpper;
     private boolean useDigits;
     private boolean usePunctuation;
+    private int length;
 
     private PasswordGenerator() {
         throw new UnsupportedOperationException("Empty constructor is not supported.");
@@ -23,6 +24,7 @@ public final class PasswordGenerator {
         this.useUpper = builder.useUpper;
         this.useDigits = builder.useDigits;
         this.usePunctuation = builder.usePunctuation;
+        this.length = builder.length;
     }
 
     public static class PasswordGeneratorBuilder {
@@ -31,12 +33,14 @@ public final class PasswordGenerator {
         private boolean useUpper;
         private boolean useDigits;
         private boolean usePunctuation;
+        private int length;
 
         public PasswordGeneratorBuilder() {
             this.useLower = false;
             this.useUpper = false;
             this.useDigits = false;
             this.usePunctuation = false;
+            this.length = 16;
         }
 
         /**
@@ -91,6 +95,11 @@ public final class PasswordGenerator {
             return this;
         }
 
+        public PasswordGeneratorBuilder length(int length) {
+            this.length = length;
+            return this;
+        }
+
         /**
          * Get an object to use.
          * <p>
@@ -99,6 +108,26 @@ public final class PasswordGenerator {
         public PasswordGenerator build() {
             return new PasswordGenerator(this);
         }
+
+        public boolean isUseLower() {
+            return useLower;
+        }
+
+        public boolean isUseUpper() {
+            return useUpper;
+        }
+
+        public boolean isUseDigits() {
+            return useDigits;
+        }
+
+        public boolean isUsePunctuation() {
+            return usePunctuation;
+        }
+
+        public int getLength() {
+            return length;
+        }
     }
 
     /**
@@ -106,11 +135,10 @@ public final class PasswordGenerator {
      * define. It will use the categories with a probability. It is not sure
      * that all of the defined categories will be used.
      *
-     * @param length the length of the password you would like to generate.
      * @return a password that uses the categories you define when constructing
      * the object with a probability.
      */
-    public String generate(int length) {
+    public String generate() {
         // Argument Validation.
         if (length <= 0) {
             return "";

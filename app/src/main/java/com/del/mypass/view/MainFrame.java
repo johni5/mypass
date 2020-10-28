@@ -21,6 +21,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by DodolinEL
@@ -29,10 +30,10 @@ import java.util.List;
 public class MainFrame extends JFrame implements ActionListener {
 
     private SecretLocator secretLocator = new SecretLocator();
-    private PasswordGenerator passwordGenerator;
+    private PasswordGenerator.PasswordGeneratorBuilder passwordBuilder;
     private Timer timer;
     private JTextField filter;
-    private Map<Integer, JList<Position>> tabs;
+    private Map<Integer, JList<PositionItem>> tabs;
 
     private Map<Integer, String> tabNames = new HashMap<Integer, String>() {{
         put(0, "Основные");
@@ -48,21 +49,27 @@ public class MainFrame extends JFrame implements ActionListener {
         setIconImage(Toolkit.getDefaultToolkit().getImage(this.getClass().getResource("/img/ico_64x64.png")));
         setResizable(false);
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        passwordGenerator = new PasswordGenerator.PasswordGeneratorBuilder()
+        passwordBuilder = new PasswordGenerator.PasswordGeneratorBuilder()
                 .useDigits(true)
                 .useLower(true)
                 .useUpper(true)
-                .usePunctuation(true)
-                .build();
+                .usePunctuation(false)
+                .length(15);
 
         JMenuBar menuBar = new JMenuBar();
         setJMenuBar(menuBar);
         JMenu menuFile = new JMenu("Файл");
         menuBar.add(menuFile);
+        JMenuItem menuItemGenerate = new JMenuItem("Параметры");
         JMenuItem menuItemBackup = new JMenuItem("Резервное копирование");
         JMenuItem menuItemRestore = new JMenuItem("Восстановление");
         JMenuItem menuItemExit = new JMenuItem("Выход");
         menuItemExit.addActionListener(arg0 -> dispatchEvent(new WindowEvent(MainFrame.this, WindowEvent.WINDOW_CLOSING)));
+        menuItemGenerate.addActionListener(ae -> {
+            PasswordDialog passwordDialog = new PasswordDialog(_this, passwordBuilder);
+            passwordDialog.setLocationRelativeTo(_this);
+            passwordDialog.setVisible(true);
+        });
         menuItemBackup.addActionListener(actionEvent -> {
             JFileChooser fc = new JFileChooser();
             fc.setMultiSelectionEnabled(false);
@@ -96,8 +103,11 @@ public class MainFrame extends JFrame implements ActionListener {
                 }
             }
         });
+        menuFile.add(menuItemGenerate);
+        menuFile.add(new JSeparator());
         menuFile.add(menuItemBackup);
         menuFile.add(menuItemRestore);
+        menuFile.add(new JSeparator());
         menuFile.add(menuItemExit);
 
         JPanel filterPanel = new JPanel(new BorderLayout());
@@ -150,22 +160,20 @@ public class MainFrame extends JFrame implements ActionListener {
         add.addActionListener(ev -> {
             if (!StringUtil.isTrimmedEmpty(name.getText())) {
                 try {
-                    Position p = ServiceManager.getInstance().findPosition(name.getText());
+                    Position p = ServiceManager.getInstance().findPosition(Utils.encodePass(name.getText(), secretLocator.read()));
                     String category = String.valueOf(tabbedPane.getSelectedIndex());
                     if (p == null) {
                         if (!StringUtil.isTrimmedEmpty(code.getText())) {
                             p = new Position();
                             p.setCategory(category);
-                            p.setName(name.getText());
+                            p.setName(Utils.encodePass(name.getText(), secretLocator.read()));
                             p.setCode(Utils.encodePass(code.getText(), secretLocator.read()));
                             ServiceManager.getInstance().createPosition(p);
                         }
                     } else {
-                        if (!Objects.equals(p.getCategory(), category)) {
-                            p.setCategory(category);
-                        } else {
-                            if (!StringUtil.isTrimmedEmpty(code.getText()))
-                                p.setCode(Utils.encodePass(code.getText(), secretLocator.read()));
+                        p.setCategory(category);
+                        if (!StringUtil.isTrimmedEmpty(code.getText())) {
+                            p.setCode(Utils.encodePass(code.getText(), secretLocator.read()));
                         }
                         ServiceManager.getInstance().updatePosition(p);
                     }
@@ -178,7 +186,7 @@ public class MainFrame extends JFrame implements ActionListener {
             }
         });
         gen.addActionListener(ev -> {
-            code.setText(passwordGenerator.generate(16));
+            code.setText(passwordBuilder.build().generate());
         });
         del.addActionListener(ev -> {
             code.setText("");
@@ -198,6 +206,46 @@ public class MainFrame extends JFrame implements ActionListener {
         filter.getInputMap().put(KeyStroke.getKeyStroke("alt shift E"), "enterKey");
         filter.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift E"), "showKey");
         filter.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift P"), "manualPath");
+        filter.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift N"), "translateNames");
+        filter.getActionMap().put("translateNames", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent ae) {
+                try {
+                    List<Position> positions = ServiceManager.getInstance().allPositions(null);
+                    if (!ListUtil.isEmpty(positions)) {
+                        if (JOptionPane.showConfirmDialog(_this,
+                                String.format("Найдено записей: %s. Хотите начать трансляцию имен?", positions.size()),
+                                "Подтвердите действие",
+                                JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+                            AtomicInteger translated = new AtomicInteger();
+                            AtomicInteger updated = new AtomicInteger();
+                            positions.forEach(p -> {
+                                try {
+                                    p.setName(Utils.encodePass(p.getName(), secretLocator.read()));
+                                    translated.incrementAndGet();
+                                } catch (Exception e) {
+                                    Utils.getLogger().error("Не удалось транслировать запись: id=" + p.getId(), e);
+                                }
+                            });
+                            positions.forEach(p -> {
+                                try {
+                                    ServiceManager.getInstance().updatePosition(p);
+                                    updated.incrementAndGet();
+                                } catch (CommonException e) {
+                                    Utils.getLogger().error("Не удалось сохранить запись: id=" + p.getId(), e);
+                                }
+                            });
+                            JOptionPane.showMessageDialog(_this,
+                                    String.format("Транслировал: %s, сохранил: %s", translated.get(), updated.get())
+                            );
+                            initList();
+                        }
+                    }
+                } catch (CommonException e) {
+                    Utils.getLogger().error(e.getMessage(), e);
+                }
+            }
+        });
         filter.getActionMap().put("manualPath", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent ae) {
@@ -216,6 +264,7 @@ public class MainFrame extends JFrame implements ActionListener {
             public void actionPerformed(ActionEvent ae) {
                 String value = JOptionPane.showInputDialog(_this, "Enter code", secretLocator.getPrivateKey());
                 if (value != null) secretLocator.setPrivateKey(value);
+                initList();
             }
         });
 
@@ -228,8 +277,8 @@ public class MainFrame extends JFrame implements ActionListener {
                 @Override
                 public void actionPerformed(ActionEvent ae) {
                     int selectedIndex = tabbedPane.getSelectedIndex();
-                    JList<Position> list = tabs.get(selectedIndex);
-                    Position p = list.getSelectedValue();
+                    JList<PositionItem> list = tabs.get(selectedIndex);
+                    PositionItem p = list.getSelectedValue();
                     if (p == null) return;
                     Map<EncodeHintType, Object> hintMap = new EnumMap<>(EncodeHintType.class);
                     hintMap.put(EncodeHintType.CHARACTER_SET, "UTF-8");
@@ -281,8 +330,8 @@ public class MainFrame extends JFrame implements ActionListener {
                 @Override
                 public void actionPerformed(ActionEvent ae) {
                     int selectedIndex = tabbedPane.getSelectedIndex();
-                    JList<Position> list = tabs.get(selectedIndex);
-                    Position p = list.getSelectedValue();
+                    JList<PositionItem> list = tabs.get(selectedIndex);
+                    PositionItem p = list.getSelectedValue();
                     String pass = "VeryFunny";
                     try {
                         pass = Utils.decodePass(p.getCode(), secretLocator.read());
@@ -301,8 +350,8 @@ public class MainFrame extends JFrame implements ActionListener {
                 @Override
                 public void actionPerformed(ActionEvent ae) {
                     int selectedIndex = tabbedPane.getSelectedIndex();
-                    JList<Position> list = tabs.get(selectedIndex);
-                    Position p = list.getSelectedValue();
+                    JList<PositionItem> list = tabs.get(selectedIndex);
+                    PositionItem p = list.getSelectedValue();
                     if (p != null) {
                         try {
                             if (JOptionPane.showConfirmDialog(_this, String.format("Вы действительно хотите удалить '%s'?", p.getName()), "Удалить запись",
@@ -318,9 +367,10 @@ public class MainFrame extends JFrame implements ActionListener {
             });
         });
 
-        firstInitList();
         setLocale(new Locale("RU"));
         pack();
+
+        timer.start();
     }
 
     private void firstInitList() {
@@ -330,27 +380,61 @@ public class MainFrame extends JFrame implements ActionListener {
     private void initList() {
         try {
             tabs.values().forEach(list -> list.setBackground(Color.WHITE));
-            List<Position> positions = ServiceManager.getInstance().allPositions(filter.getText());
-            Map<Integer, List<Position>> index = new HashMap<>();
-            positions.forEach(p -> {
-                int i = tabs.keySet().iterator().next();
-                try {
-                    if (p.getCategory() != null) i = Integer.parseInt(p.getCategory());
-                } catch (NumberFormatException e) {
-                    //
+            List<Position> positions = ServiceManager.getInstance().allPositions(null);
+            List<PositionItem> items = translate(positions);
+            Map<Integer, List<PositionItem>> index = new HashMap<>();
+            items.forEach(p -> {
+                if (passFilter(p)) {
+                    int i = p.getCategory();
+                    if (!index.containsKey(i)) index.put(i, new ArrayList<>());
+                    index.get(i).add(p);
                 }
-                if (!index.containsKey(i)) index.put(i, new ArrayList<>());
-                index.get(i).add(p);
             });
             for (Integer i : tabs.keySet()) {
-                List<Position> positionList = index.get(i);
-                DefaultListModel<Position> listModel = new DefaultListModel<>();
+                List<PositionItem> positionList = index.get(i);
+                DefaultListModel<PositionItem> listModel = new DefaultListModel<>();
                 if (positionList != null) positionList.forEach(listModel::addElement);
                 tabs.get(i).setModel(listModel);
             }
         } catch (CommonException e) {
             Utils.getLogger().error(e.getMessage(), e);
         }
+    }
+
+    private boolean passFilter(PositionItem p) {
+        if (!StringUtil.isTrimmedEmpty(filter.getText())) {
+            return p.getName().trim().toLowerCase().contains(filter.getText().trim().toLowerCase());
+        }
+        return true;
+    }
+
+    private List<PositionItem> translate(List<Position> positions) {
+        List<PositionItem> r = new ArrayList<>();
+        if (positions != null) {
+            positions.forEach(p -> {
+                try {
+                    r.add(new PositionItem(
+                            Utils.decodePass(p.getName(), secretLocator.read()),
+                            parseCategory(p.getCategory()),
+                            p
+                    ));
+                } catch (Exception e) {
+                    //
+                }
+            });
+        }
+        return r;
+    }
+
+    private Integer parseCategory(String category) {
+        Integer c = tabs.keySet().iterator().next();
+        if (!StringUtil.isTrimmedEmpty(category))
+            try {
+                c = Integer.parseInt(category);
+            } catch (NumberFormatException e) {
+                //
+            }
+        return c;
     }
 
     @Override
@@ -376,8 +460,8 @@ public class MainFrame extends JFrame implements ActionListener {
         return new ImageIcon(image.getScaledInstance(w, h, java.awt.Image.SCALE_SMOOTH));
     }
 
-    private JList<Position> newList(int index, JTabbedPane tabbedPane) {
-        JList<Position> l = new JList<>();
+    private JList<PositionItem> newList(int index, JTabbedPane tabbedPane) {
+        JList<PositionItem> l = new JList<>();
         JScrollPane scrollPane = new JScrollPane();
         scrollPane.setPreferredSize(new Dimension(300, 300));
         l.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
