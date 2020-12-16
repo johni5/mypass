@@ -32,6 +32,7 @@ public class MainFrame extends JFrame implements ActionListener {
     private SecretLocator secretLocator = new SecretLocator();
     private PasswordGenerator.PasswordGeneratorBuilder passwordBuilder;
     private Timer timer;
+    private Timer cbCleaner;
     private JTextField filter;
     private Map<Integer, JList<PositionItem>> tabs;
 
@@ -45,6 +46,16 @@ public class MainFrame extends JFrame implements ActionListener {
         final JFrame _this = this;
         timer = new Timer(300, this);
         timer.setRepeats(false);
+        cbCleaner = new Timer(10000, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                StringSelection stringSelection = new StringSelection("");
+                Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+                clipboard.setContents(stringSelection, null);
+
+            }
+        });
+        cbCleaner.setRepeats(false);
         addWindowListener(new MainFrameActions(this));
         setIconImage(Toolkit.getDefaultToolkit().getImage(this.getClass().getResource("/img/ico_64x64.png")));
         setResizable(false);
@@ -344,6 +355,7 @@ public class MainFrame extends JFrame implements ActionListener {
                     StringSelection stringSelection = new StringSelection(pass);
                     Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
                     clipboard.setContents(stringSelection, null);
+                    cbCleaner.start();
                 }
             });
             list.getActionMap().put("delete", new AbstractAction() {
