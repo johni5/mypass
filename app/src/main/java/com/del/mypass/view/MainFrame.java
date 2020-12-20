@@ -355,7 +355,7 @@ public class MainFrame extends JFrame implements ActionListener {
                     StringSelection stringSelection = new StringSelection(pass);
                     Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
                     clipboard.setContents(stringSelection, null);
-                    cbCleaner.start();
+                    cbCleaner.restart();
                 }
             });
             list.getActionMap().put("delete", new AbstractAction() {
