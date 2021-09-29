@@ -273,9 +273,21 @@ public class MainFrame extends JFrame implements ActionListener {
         filter.getActionMap().put("enterKey", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent ae) {
-                String value = JOptionPane.showInputDialog(_this, "Enter code", secretLocator.getPrivateKey());
-                if (value != null) secretLocator.setPrivateKey(value);
-                initList();
+                JPanel panel = new JPanel();
+                JLabel label = new JLabel("Key:");
+                JPasswordField pass = new JPasswordField(10);
+                panel.add(label);
+                panel.add(pass);
+                String[] options = new String[]{"OK", "Cancel"};
+                int option = JOptionPane.showOptionDialog(_this, panel, "Enter key",
+                        JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE,
+                        null, options, options[0]);
+                if (option == JOptionPane.OK_OPTION) {
+                    char[] password = pass.getPassword();
+                    String value = new String(password);
+                    if (!StringUtil.isTrimmedEmpty(value)) secretLocator.setPrivateKey(value);
+                    initList();
+                }
             }
         });
 
