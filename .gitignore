@@ -1,0 +1,11 @@
+.idea/
+app/mypass-app.iml
+app/target/
+data/
+launcher/mypass-launcher.iml
+launcher/target/
+mypass.iml
+out/data/
+out/lib/
+out/log/
+out/mypass-launcher-1.0-SNAPSHOT.jar
