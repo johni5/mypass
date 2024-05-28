@@ -2,21 +2,25 @@ package com.del.mypass.utils;
 
 import org.apache.log4j.Logger;
 
-import javax.crypto.*;
-import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.UnsupportedEncodingException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.MessageDigest;
+import java.io.File;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
-import java.util.Base64;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
+import java.util.Map;
+import java.util.Optional;
 import java.util.ResourceBundle;
 
 public class Utils {
 
-    final static private Logger logger = Logger.getLogger("QR transfer Logger");
+    final static private Logger logger = Logger.getLogger("MyPass Logger");
 
     private static ResourceBundle info;
 
@@ -32,33 +36,74 @@ public class Utils {
         return t1 == null ? t2 : t1;
     }
 
-    public static String encodePass(String p, String _key) throws InvalidAlgorithmParameterException, InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, UnsupportedEncodingException, BadPaddingException, IllegalBlockSizeException {
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        byte[] digestOfPassword = Arrays.copyOf(md.digest(_key.getBytes("utf-8")), 16);
-        SecretKey key = new SecretKeySpec(digestOfPassword, "AES");
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        IvParameterSpec iv = new IvParameterSpec(new byte[16]);
-        cipher.init(Cipher.ENCRYPT_MODE, key, iv);
-        byte[] plainTextBytes = p.getBytes("utf-8");
-        return Base64.getEncoder().encodeToString(cipher.doFinal(plainTextBytes));
-    }
-
-    public static String decodePass(String p, String _key) throws InvalidAlgorithmParameterException, InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, UnsupportedEncodingException, BadPaddingException, IllegalBlockSizeException {
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        byte[] digestOfPassword = Arrays.copyOf(md.digest(_key.getBytes("utf-8")), 16);
-        SecretKey key = new SecretKeySpec(digestOfPassword, "AES");
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        IvParameterSpec iv = new IvParameterSpec(new byte[16]);
-        cipher.init(Cipher.DECRYPT_MODE, key, iv);
-        byte[] decode = Base64.getDecoder().decode(p);
-        return new String(cipher.doFinal(decode), "UTF-8");
-    }
-
     public static ResourceBundle getInfo() {
         if (info == null) {
             info = ResourceBundle.getBundle("info");
         }
         return info;
     }
+
+    public static SecretKey getKeyFromPassword(String password, byte[] salt)
+            throws NoSuchAlgorithmException, InvalidKeySpecException {
+        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, 10 * 65536, 256);
+        SecretKey originalKey = new SecretKeySpec(factory.generateSecret(spec).getEncoded(), "AES");
+        return originalKey;
+    }
+
+    public static void fixKeyLength() throws CommonException {
+        String errorString = "Failed manually overriding key-length permissions.";
+        int newMaxKeyLength;
+        try {
+            if ((newMaxKeyLength = Cipher.getMaxAllowedKeyLength("AES")) < 256) {
+                Class c = Class.forName("javax.crypto.CryptoAllPermissionCollection");
+                Constructor con = c.getDeclaredConstructor();
+                con.setAccessible(true);
+                Object allPermissionCollection = con.newInstance();
+                Field f = c.getDeclaredField("all_allowed");
+                f.setAccessible(true);
+                f.setBoolean(allPermissionCollection, true);
+
+                c = Class.forName("javax.crypto.CryptoPermissions");
+                con = c.getDeclaredConstructor();
+                con.setAccessible(true);
+                Object allPermissions = con.newInstance();
+                f = c.getDeclaredField("perms");
+                f.setAccessible(true);
+                ((Map) f.get(allPermissions)).put("*", allPermissionCollection);
+
+                c = Class.forName("javax.crypto.JceSecurityManager");
+                f = c.getDeclaredField("defaultPolicy");
+                f.setAccessible(true);
+                Field mf = Field.class.getDeclaredField("modifiers");
+                mf.setAccessible(true);
+                mf.setInt(f, f.getModifiers() & ~Modifier.FINAL);
+                f.set(null, allPermissions);
+
+                newMaxKeyLength = Cipher.getMaxAllowedKeyLength("AES");
+            }
+        } catch (Exception e) {
+            throw new CommonException(errorString, e);
+        }
+        if (newMaxKeyLength < 256)
+            throw new CommonException(errorString); // hack failed
+    }
+
+    public static Optional<File[]> searchDataSet() {
+        File dir = new File("data/");
+        if (dir.exists() || dir.mkdir()) {
+            return Optional.ofNullable(dir.listFiles());
+        }
+        return Optional.empty();
+    }
+
+    public static File newDataSet() {
+        File dir = new File("data/");
+        if (dir.exists() || dir.mkdir()) {
+            return new File(String.format("data/st%sm", Long.toString(System.currentTimeMillis(), Character.MAX_RADIX)));
+        }
+        return null;
+    }
+
 
 }

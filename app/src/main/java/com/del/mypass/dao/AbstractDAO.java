@@ -2,79 +2,67 @@ package com.del.mypass.dao;
 
 import com.del.mypass.utils.CommonException;
 
-import javax.persistence.EntityManager;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Date;
-import java.util.concurrent.Callable;
 
-abstract public class AbstractDAO<T, ID> {
+abstract public class AbstractDAO<T> {
 
-    private EntityManagerProvider managerProvider;
+    private Connection c;
     private Class<T> tClass;
 
-    public AbstractDAO(EntityManagerProvider managerProvider, Class<T> tClass) {
-        this.managerProvider = managerProvider;
+    public AbstractDAO(Connection c, Class<T> tClass) {
+        this.c = c;
         this.tClass = tClass;
     }
 
-    public void createAndCommit(T entity) throws CommonException {
-        transaction(() -> {
-            manager().persist(entity);
-            manager().flush();
-            return null;
-        });
-    }
-
-    public void create(T entity) {
-        manager().persist(entity);
-    }
-
-    public T updateAndCommit(T entity) throws CommonException {
-        return transaction(() -> {
-            manager().merge(entity);
-            manager().flush();
-            return entity;
-        });
-    }
-
-    public T update(T entity) {
-        return manager().merge(entity);
-    }
-
-    public void refresh(T entity) {
-        manager().refresh(entity);
-    }
-
-    public void removeAndCommit(ID id) throws CommonException {
-        transaction(() -> {
-            remove(id);
-            manager().flush();
-            return null;
-        });
-    }
-
-    protected <V> V transaction(Callable<V> t) throws CommonException {
-        manager().getTransaction().begin();
-        V result;
-        try {
-            result = t.call();
+    protected <V> V session(Transaction<Statement, V> t) throws CommonException {
+        try (Statement st = c.createStatement()) {
+            V res = t.begin(st);
+            return res;
         } catch (Exception e) {
-            manager().getTransaction().rollback();
             throw new CommonException(e);
         }
-        manager().getTransaction().commit();
-        return result;
     }
 
-    public void remove(ID id) {
-        manager().remove(get(id));
+    protected <V> V transaction(Transaction<Statement, V> t) throws CommonException {
+        try (Statement st = c.createStatement()) {
+            V res = t.begin(st);
+            c.commit();
+            return res;
+        } catch (Exception e) {
+            try {
+                c.rollback();
+            } catch (SQLException ex) {
+                //
+            }
+            throw new CommonException(e);
+        }
     }
 
-    public T get(ID id) {
-        return manager().find(tClass, id);
+    protected <V> V transaction(Transaction<PreparedStatement, V> t, String sql) throws CommonException {
+        try (PreparedStatement st = c.prepareStatement(sql)) {
+            V res = t.begin(st);
+            c.commit();
+            return res;
+        } catch (Exception e) {
+            try {
+                c.rollback();
+            } catch (SQLException ex) {
+                //
+            }
+            throw new CommonException(e);
+        }
     }
 
-    protected EntityManager manager() {
-        return managerProvider.getEntityManager();
+    Statement statement() throws SQLException {
+        return c.createStatement();
+    }
+
+    PreparedStatement prepareStatement(String sql) throws SQLException {
+        return c.prepareStatement(sql);
     }
 
     public static Long getLong(Object obj, Long def) {
@@ -96,5 +84,6 @@ abstract public class AbstractDAO<T, ID> {
     public static String getString(Object obj, String def) {
         return obj != null ? obj.toString() : def;
     }
+
 
 }

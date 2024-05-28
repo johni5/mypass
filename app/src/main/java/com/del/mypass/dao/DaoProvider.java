@@ -3,16 +3,17 @@ package com.del.mypass.dao;
 import com.del.mypass.utils.CommonException;
 import com.google.common.collect.Maps;
 
+import java.sql.Connection;
 import java.util.Map;
 
 public class DaoProvider {
 
-    private EntityManagerProvider managerProvider;
+    private Connection connection;
 
     private Map<Class<? extends AbstractDAO>, AbstractDAO> cache = Maps.newHashMap();
 
-    public DaoProvider(EntityManagerProvider managerProvider) {
-        this.managerProvider = managerProvider;
+    public DaoProvider(Connection connection) {
+        this.connection = connection;
     }
 
     public PositionDAO getPositionDAO() throws CommonException {
@@ -23,7 +24,7 @@ public class DaoProvider {
     private <T extends AbstractDAO> T lookup(Class<T> daoClass) throws CommonException {
         if (!cache.containsKey(daoClass)) {
             try {
-                T instance = daoClass.getConstructor(EntityManagerProvider.class).newInstance(managerProvider);
+                T instance = daoClass.getConstructor(Connection.class).newInstance(connection);
                 cache.put(daoClass, instance);
             } catch (Exception e) {
                 throw new CommonException(e);

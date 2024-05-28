@@ -1,11 +1,13 @@
 package com.del.mypass.actions;
 
 
+import com.del.mypass.dao.ServiceManager;
+import com.del.mypass.utils.CommonException;
 import com.del.mypass.utils.SystemEnv;
 import com.del.mypass.utils.Utils;
+import com.del.mypass.view.MainFrame;
 import org.apache.log4j.Logger;
 
-import javax.swing.*;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 
@@ -13,9 +15,9 @@ public class MainFrameActions implements WindowListener {
 
     final static private Logger logger = Logger.getLogger(MainFrameActions.class);
 
-    private JFrame owner;
+    private MainFrame owner;
 
-    public MainFrameActions(JFrame owner) {
+    public MainFrameActions(MainFrame owner) {
         this.owner = owner;
     }
 
@@ -32,11 +34,20 @@ public class MainFrameActions implements WindowListener {
 
     @Override
     public void windowClosing(WindowEvent e) {
-//        if (JOptionPane.showConfirmDialog(owner, "Вы действительно хотите выйти?", "Завершение работы",
-//                JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
         logger.info("================================= WINDOW CLOSING =================================");
+        if (ServiceManager.isReady()) {
+            try {
+                ServiceManager.getInstance().save(owner.getSecretKey());
+            } catch (CommonException ex) {
+                logger.error(ex.getMessage(), ex);
+            }
+            try {
+                ServiceManager.getInstance().closeConnection();
+            } catch (CommonException ex) {
+                logger.error(ex.getMessage(), ex);
+            }
+        }
         System.exit(0);
-//        }
     }
 
     @Override

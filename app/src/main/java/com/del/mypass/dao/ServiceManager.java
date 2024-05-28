@@ -1,74 +1,152 @@
 package com.del.mypass.dao;
 
 import com.del.mypass.db.Position;
-import com.del.mypass.utils.*;
-import com.google.common.collect.Maps;
+import com.del.mypass.utils.CommonException;
+import com.del.mypass.utils.FileEncrypterDecrypter;
+import com.del.mypass.utils.Utils;
 import org.apache.log4j.Logger;
-import org.hibernate.Session;
 
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.Persistence;
+import javax.crypto.SecretKey;
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.sql.*;
 import java.util.List;
-import java.util.Map;
 
-public class ServiceManager implements EntityManagerProvider {
+public class ServiceManager {
 
     final static private Logger logger = Logger.getLogger(ServiceManager.class);
 
+    private static final String DB_URL = "jdbc:h2:mem:mypass";
+    private static final String DB_USER = "sa";
+    private static final String DB_PASSWORD = "";
+    private static final String TRANSFORMATION = "AES/CBC/PKCS5Padding";
+
     private static ThreadLocal<ServiceManager> instance = new ThreadLocal<>();
 
-    private EntityManager entityManager;
     private DaoProvider provider;
+    private Connection connection;
+    private FileEncrypterDecrypter file;
 
-    public static ServiceManager getInstance() {
-        ServiceManager serviceManager = instance.get();
-        if (serviceManager == null) {
-            serviceManager = new ServiceManager();
-            instance.set(serviceManager);
-            logger.info("ServiceManager[" + serviceManager.hashCode() + "] has been created [" + serviceManager.getEntityManager().isOpen() + "]");
-        }
-        return serviceManager;
+    private ServiceManager() {
     }
 
-    public static void close() {
+    public static ServiceManager begin(SecretKey key) throws CommonException {
+        Utils.fixKeyLength();
+
         ServiceManager serviceManager = instance.get();
         if (serviceManager != null) {
-            serviceManager.closeConnections();
+            serviceManager.closeConnection();
             instance.remove();
-            logger.info("ServiceManager[" + serviceManager.hashCode() + "] has been closed");
         }
+        serviceManager = new ServiceManager();
+        if (serviceManager.init(key)) {
+            instance.set(serviceManager);
+            logger.info("ServiceManager[" + serviceManager.hashCode() + "] has been created");
+        } else {
+            throw new CommonException("Service Manager not started");
+        }
+        return getInstance();
+    }
+
+    public static ServiceManager getInstance() {
+        return instance.get();
+    }
+
+    public static boolean isReady() {
+        return instance.get() != null;
+    }
+
+    private boolean init(SecretKey key) {
+        try {
+            connection = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+            connection.setAutoCommit(false);
+            boolean schemaExists = false;
+            try (PreparedStatement ps = connection.prepareStatement("SHOW SCHEMAS")) {
+                ResultSet resultSet = ps.executeQuery();
+                while (resultSet.next()) {
+                    String name = resultSet.getString(1);
+                    if (name.equalsIgnoreCase("mypass")) {
+                        schemaExists = true;
+                        break;
+                    }
+                }
+                connection.commit();
+            } catch (SQLException e) {
+                connection.rollback();
+                throw new SQLException("SHOW SCHEMAS ERROR", e);
+            }
+            if (!schemaExists) {
+                String sql = getInitSQL(key);
+                try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                    ps.executeUpdate();
+                    connection.commit();
+                    logger.info("RUNSCRIPT: " + sql);
+                } catch (SQLException e) {
+                    connection.rollback();
+                    throw new SQLException("RUNSCRIPT ERROR", e);
+                }
+            }
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (Exception ex) {
+                    //
+                }
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private String getInitSQL(SecretKey key) throws CommonException {
+        final StringBuilder sql = new StringBuilder();
+        Utils.searchDataSet().ifPresent(files -> {
+            for (File f : files) {
+                try {
+                    this.file = new FileEncrypterDecrypter(TRANSFORMATION, f);
+                    sql.append(this.file.decrypt(key));
+                    break;
+                } catch (Exception e) {
+                    Utils.getLogger().info(String.format("Read file '%s' error: %s", f.getName(), e.getMessage()));
+                }
+            }
+        });
+        if (sql.length() == 0) {
+            try {
+                this.file = new FileEncrypterDecrypter(TRANSFORMATION, Utils.newDataSet());
+                InputStream resSt = ServiceManager.class.getResourceAsStream("/META-INF/init.sql");
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(resSt))) {
+                    String line = br.readLine();
+                    while (line != null) {
+                        sql.append(line);
+                        sql.append(System.lineSeparator());
+                        line = br.readLine();
+                    }
+                }
+            } catch (Exception e) {
+                throw new CommonException(e);
+            }
+        }
+        return sql.toString();
     }
 
     private DaoProvider getProvider() {
         if (provider == null) {
-            provider = new DaoProvider(this);
+            provider = new DaoProvider(connection);
         }
         return provider;
     }
 
-    @Override
-    public EntityManager getEntityManager() {
-        if (!isReady()) {
-            EntityManagerFactory emf = Persistence.createEntityManagerFactory("mypass");
-            entityManager = emf.createEntityManager();
+    public void closeConnection() throws CommonException {
+        try {
+            if (connection != null && !connection.isClosed()) connection.close();
+        } catch (SQLException e) {
+            throw new CommonException(e);
         }
-        return entityManager;
-    }
-
-    private void closeConnections() {
-        if (isReady()) entityManager.close();
-    }
-
-    public boolean isReady() {
-        return entityManager != null && entityManager.isOpen();
-    }
-
-    public void clear() {
-        getEntityManager().clear();
     }
 
     /*POSITION*/
@@ -89,60 +167,50 @@ public class ServiceManager implements EntityManagerProvider {
         return getProvider().getPositionDAO().findAll(text);
     }
 
+    public int getSize() throws CommonException {
+        return getProvider().getPositionDAO().getSize();
+    }
+
     public Position findPosition(String name) throws CommonException {
         return getProvider().getPositionDAO().find(name);
     }
 
     /*OTHER*/
 
-    public void backupData(String path, String pwd, SecretLocator secretLocator) throws CommonException {
+    public void backupData(String path, String pwd) throws CommonException {
         String ext = ".back";
         if (!path.endsWith(ext)) path = path + ext;
-        try (Session session = getEntityManager().unwrap(Session.class)) {
-            session.beginTransaction();
-            if (StringUtil.isTrimmedEmpty(pwd)) {
-                List<Position> all = getProvider().getPositionDAO().findAll(null);
-                Map<String, String> dictionary = Maps.newHashMap();
-                all.forEach(p -> {
-                    try {
-                        dictionary.put(p.getName(), Utils.decodePass(p.getName(), secretLocator.read()));
-                        dictionary.put(p.getCode(), Utils.decodePass(p.getCode(), secretLocator.read()));
-                    } catch (Exception e) {
-                        dictionary.put(p.getName(), "unknown");
-                    }
-                });
+        getProvider().getPositionDAO().backup(path, pwd);
+    }
 
-                List list = session.createSQLQuery("SCRIPT TABLE POSITION ").getResultList();
-                final StringBuilder sb = new StringBuilder();
-                list.forEach(s -> sb.append(s).append(System.lineSeparator()));
-                String sql = sb.toString();
-                for (String key : dictionary.keySet()) {
-                    sql = sql.replace(key, dictionary.get(key));
+    public void restoreData(String path, String pwd) throws CommonException {
+        getProvider().getPositionDAO().restore(path, pwd);
+    }
+
+    public void save(SecretKey secretKey) throws CommonException {
+        try {
+            try (PreparedStatement ps = connection.prepareStatement("SCRIPT TABLE position")) {
+                ResultSet rs = ps.executeQuery();
+                StringBuilder sql = new StringBuilder();
+                while (rs.next()) {
+                    sql.append(rs.getString(1));
+                    sql.append(System.lineSeparator());
                 }
-                File f = new File(path);
-                try {
-                    if (f.exists() || f.createNewFile()) {
-                        FileUtils.writeToFile(new File(path), sql.getBytes(StandardCharsets.UTF_8));
+                if (sql.length() > 0) {
+                    if (file != null) {
+                        file.encrypt(sql.toString(), secretKey);
                     }
-                } catch (IOException e) {
-                    throw new CommonException(e);
                 }
-            } else {
-                session.createSQLQuery("SCRIPT DROP TO :path COMPRESSION DEFLATE CIPHER AES PASSWORD :pwd " +
-                        "   TABLE POSITION ").
-                        setParameter("path", path).setParameter("pwd", pwd).getResultList();
+            } catch (Exception e) {
+                connection.rollback();
+                throw new SQLException("BACKUP ERROR", e);
             }
-            session.getTransaction().commit();
+        } catch (SQLException e) {
+            throw new CommonException(e);
         }
     }
 
-    public void restoreData(String path, String pwd) {
-        try (Session session = getEntityManager().unwrap(Session.class)) {
-            session.beginTransaction();
-            session.createSQLQuery("RUNSCRIPT FROM :path COMPRESSION DEFLATE CIPHER AES PASSWORD :pwd").
-                    setParameter("path", path).setParameter("pwd", pwd).executeUpdate();
-            session.getTransaction().commit();
-        }
+    public void renameGroup(String oldName, String newName) throws CommonException {
+        getProvider().getPositionDAO().renameGroup(oldName, newName);
     }
-
 }

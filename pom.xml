@@ -12,7 +12,7 @@
     <name>Main</name>
 
     <properties>
-        <version.info>1.09-a</version.info>
+        <version.info>2.00</version.info>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
@@ -56,10 +56,24 @@
 
     <profiles>
         <profile>
-            <id>app</id>
+            <id>dev</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
             </activation>
+            <properties>
+                <log.level>INFO</log.level>
+            </properties>
+            <modules>
+                <module>app</module>
+                <module>launcher</module>
+            </modules>
+        </profile>
+
+        <profile>
+            <id>prod</id>
+            <properties>
+                <log.level>WARN</log.level>
+            </properties>
             <modules>
                 <module>app</module>
                 <module>launcher</module>

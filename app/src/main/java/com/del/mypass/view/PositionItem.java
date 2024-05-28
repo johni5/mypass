@@ -2,24 +2,16 @@ package com.del.mypass.view;
 
 import com.del.mypass.db.Position;
 
-public class PositionItem {
+public class PositionItem implements Comparable<PositionItem> {
 
-    private String name;
-    private Integer category;
     private Position position;
 
-    public PositionItem(String name, Integer category, Position position) {
-        this.name = name;
-        this.category = category;
+    public PositionItem(Position position) {
         this.position = position;
     }
 
     public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
+        return position.getName();
     }
 
     public String getCode() {
@@ -30,17 +22,17 @@ public class PositionItem {
         return position.getId();
     }
 
-    public Integer getCategory() {
-        return category;
-    }
-
-    public void setCategory(Integer category) {
-        this.category = category;
+    public Position getPosition() {
+        return position;
     }
 
     @Override
     public String toString() {
-        return name;
+        return getName();
     }
 
+    @Override
+    public int compareTo(PositionItem o) {
+        return o.position.getId().compareTo(position.getId());
+    }
 }
