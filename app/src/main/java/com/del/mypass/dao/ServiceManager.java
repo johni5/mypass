@@ -1,14 +1,19 @@
 package com.del.mypass.dao;
 
 import com.del.mypass.db.Position;
-import com.del.mypass.utils.CommonException;
+import com.del.mypass.utils.*;
+import com.google.common.collect.Maps;
 import org.apache.log4j.Logger;
 import org.hibernate.Session;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 public class ServiceManager implements EntityManagerProvider {
 
@@ -90,14 +95,43 @@ public class ServiceManager implements EntityManagerProvider {
 
     /*OTHER*/
 
-    public void backupData(String path, String pwd) {
+    public void backupData(String path, String pwd, SecretLocator secretLocator) throws CommonException {
         String ext = ".back";
         if (!path.endsWith(ext)) path = path + ext;
         try (Session session = getEntityManager().unwrap(Session.class)) {
             session.beginTransaction();
-            session.createSQLQuery("SCRIPT DROP TO :path COMPRESSION DEFLATE CIPHER AES PASSWORD :pwd " +
-                    "   TABLE POSITION ").
-                    setParameter("path", path).setParameter("pwd", pwd).getResultList();
+            if (StringUtil.isTrimmedEmpty(pwd)) {
+                List<Position> all = getProvider().getPositionDAO().findAll(null);
+                Map<String, String> dictionary = Maps.newHashMap();
+                all.forEach(p -> {
+                    try {
+                        dictionary.put(p.getName(), Utils.decodePass(p.getName(), secretLocator.read()));
+                        dictionary.put(p.getCode(), Utils.decodePass(p.getCode(), secretLocator.read()));
+                    } catch (Exception e) {
+                        dictionary.put(p.getName(), "unknown");
+                    }
+                });
+
+                List list = session.createSQLQuery("SCRIPT TABLE POSITION ").getResultList();
+                final StringBuilder sb = new StringBuilder();
+                list.forEach(s -> sb.append(s).append(System.lineSeparator()));
+                String sql = sb.toString();
+                for (String key : dictionary.keySet()) {
+                    sql = sql.replace(key, dictionary.get(key));
+                }
+                File f = new File(path);
+                try {
+                    if (f.exists() || f.createNewFile()) {
+                        FileUtils.writeToFile(new File(path), sql.getBytes(StandardCharsets.UTF_8));
+                    }
+                } catch (IOException e) {
+                    throw new CommonException(e);
+                }
+            } else {
+                session.createSQLQuery("SCRIPT DROP TO :path COMPRESSION DEFLATE CIPHER AES PASSWORD :pwd " +
+                        "   TABLE POSITION ").
+                        setParameter("path", path).setParameter("pwd", pwd).getResultList();
+            }
             session.getTransaction().commit();
         }
     }

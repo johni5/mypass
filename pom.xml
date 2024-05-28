@@ -12,7 +12,7 @@
     <name>Main</name>
 
     <properties>
-        <version.info>1.09</version.info>
+        <version.info>1.09-a</version.info>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>

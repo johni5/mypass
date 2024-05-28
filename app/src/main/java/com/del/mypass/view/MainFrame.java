@@ -89,9 +89,7 @@ public class MainFrame extends JFrame implements ActionListener {
                 File selectedFile = fc.getSelectedFile();
                 try {
                     String pwd = JOptionPane.showInputDialog(_this, "Задайте пароль", "Резервная копия базы данных", JOptionPane.QUESTION_MESSAGE);
-                    if (!StringUtil.isTrimmedEmpty(pwd)) {
-                        ServiceManager.getInstance().backupData(selectedFile.getCanonicalPath(), pwd);
-                    }
+                    ServiceManager.getInstance().backupData(selectedFile.getCanonicalPath(), pwd, secretLocator);
                 } catch (Exception e1) {
                     Utils.getLogger().error(e1.getMessage(), e1);
                 }
