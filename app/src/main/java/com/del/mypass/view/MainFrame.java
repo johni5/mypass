@@ -1,11 +1,9 @@
 package com.del.mypass.view;
 
-
 import com.del.mypass.actions.MainFrameActions;
 import com.del.mypass.dao.ServiceManager;
 import com.del.mypass.db.Position;
 import com.del.mypass.utils.*;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -26,15 +24,13 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-
 /**
  * Created by DodolinEL
  * date: 02.07.2019
  */
 public class MainFrame extends JFrame {
-
+    private final static int TAB_MAXIMUM = 10;
     private PasswordGenerator.PasswordGeneratorBuilder passwordBuilder;
     private Timer timer;
     private Timer cbCleaner;
@@ -44,7 +40,6 @@ public class MainFrame extends JFrame {
     private SystemInfo systemInfo;
     private SecretKey secretKey;
     private int lastIndexTab;
-
     private JMenuBar menuBar;
     private JMenu menuFile;
     private JMenuItem menuItemGenerate;
@@ -57,33 +52,25 @@ public class MainFrame extends JFrame {
     private JTabbedPane tabbedPane;
     private JTextField nameTF;
     private JTextField codeTF;
-
     private JButton addBtn;
     private JButton genBtn;
     private JButton delBtn;
-
     final JFrame _this;
-
     private List<String> tabNames = Lists.newArrayList("Основные", "Другие");
-
     public MainFrame() {
         setTitle(String.format("Версия %s", Utils.getInfo().getString("version.info")));
         _this = this;
         systemInfo = new SystemInfo();
-
         timer = new Timer(300, e -> initList());
         timer.setRepeats(false);
-
         cbCleaner = new Timer(10000, e -> {
             StringSelection stringSelection = new StringSelection("");
             Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
             clipboard.setContents(stringSelection, null);
         });
         cbCleaner.setRepeats(false);
-
         blinkTimer = new Timer(100, e -> filter.setBackground(Color.WHITE));
         blinkTimer.setRepeats(false);
-
         addWindowListener(new MainFrameActions(this));
         setIconImage(Toolkit.getDefaultToolkit().getImage(this.getClass().getResource("/img/ico_64x64.png")));
         setResizable(false);
@@ -94,7 +81,6 @@ public class MainFrame extends JFrame {
                 .useUpper(true)
                 .usePunctuation(false)
                 .length(15);
-
         menuBar = new JMenuBar();
         setJMenuBar(menuBar);
         menuFile = new JMenu("Файл");
@@ -104,24 +90,7 @@ public class MainFrame extends JFrame {
         menuItemBackup = new JMenuItem("Резервное копирование");
         menuItemRestore = new JMenuItem("Восстановление");
         menuItemExit = new JMenuItem("Выход");
-        menuItemRename.addActionListener(a -> {
-            String oldName = tabNames.get(tabbedPane.getSelectedIndex());
-            String name = JOptionPane.showInputDialog(_this, "Введите новое имя", oldName);
-            if (!StringUtil.isTrimmedEmpty(name)) {
-                try {
-                    if (ServiceManager.isReady())
-                        ServiceManager.getInstance().renameGroup(oldName, name);
-                    tabNames.set(tabbedPane.getSelectedIndex(), name);
-                    initTabs();
-                    initList();
-                    tabbedPane.setSelectedIndex(lastIndexTab);
-
-                } catch (Exception e) {
-                    Utils.getLogger().error(e.getMessage(), e);
-                    blinkRed();
-                }
-            }
-        });
+        menuItemRename.addActionListener(a -> renameTab());
         menuItemExit.addActionListener(arg0 -> dispatchEvent(new WindowEvent(MainFrame.this, WindowEvent.WINDOW_CLOSING)));
         menuItemGenerate.addActionListener(ae -> {
             PasswordDialog passwordDialog = new PasswordDialog(_this, passwordBuilder);
@@ -167,12 +136,11 @@ public class MainFrame extends JFrame {
         menuFile.add(menuItemRestore);
         menuFile.add(new JSeparator());
         menuFile.add(menuItemExit);
-
         filterPanel = new JPanel(new BorderLayout());
         editPanel = new JPanel();
-
         tabbedPane = new JTabbedPane();
         tabbedPane.setPreferredSize(new Dimension(300, 300));
+        tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         tabbedPane.getModel().addChangeListener(e -> {
             if (tabbedPane.getSelectedIndex() == tabNames.size()) {
                 String n = JOptionPane.showInputDialog(MainFrame.this, "Название", "Группа " + tabNames.size());
@@ -189,15 +157,20 @@ public class MainFrame extends JFrame {
                 lastIndexTab = tabbedPane.getSelectedIndex();
             }
         });
+        tabbedPane.addMouseListener(new ClickMouseListener() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    renameTab();
+                }
+            }
+        });
         tabs = new LinkedHashMap<>();
-
         filter = new JTextField();
         setStyle(filter, 14.0f, 3, null, null);
         filterPanel.add(filter);
-
         nameTF = new JTextField();
         setStyle(nameTF, 14.0f, 3, 200, null);
-
         codeTF = new JTextField();
         setStyle(codeTF, 14.0f, 3, 200, null);
         int wh = codeTF.getPreferredSize().height;
@@ -213,11 +186,9 @@ public class MainFrame extends JFrame {
         editPanel.add(addBtn);
         editPanel.add(genBtn);
         editPanel.add(delBtn);
-
         getContentPane().add(filterPanel, BorderLayout.NORTH);
         getContentPane().add(tabbedPane, BorderLayout.CENTER);
         getContentPane().add(editPanel, BorderLayout.SOUTH);
-
         addBtn.addActionListener(ev -> {
             if (!StringUtil.isTrimmedEmpty(nameTF.getText())) {
                 try {
@@ -257,7 +228,6 @@ public class MainFrame extends JFrame {
             nameTF.setText("");
             timer.start();
         });
-
         filter.addKeyListener(new KeyAdapter() {
             @Override
             public void keyReleased(KeyEvent keyEvent) {
@@ -265,51 +235,8 @@ public class MainFrame extends JFrame {
                 else timer.start();
             }
         });
-
         filter.getInputMap().put(KeyStroke.getKeyStroke("alt shift E"), "enterKey");
-        filter.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift E"), "showKey");
-        filter.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift P"), "manualPath");
         filter.getInputMap().put(KeyStroke.getKeyStroke("ctrl alt shift N"), "translateNames");
-        filter.getActionMap().put("translateNames", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent ae) {
-                try {
-                    List<Position> positions = ServiceManager.getInstance().allPositions(null);
-                    if (!ListUtil.isEmpty(positions)) {
-                        if (JOptionPane.showConfirmDialog(_this,
-                                String.format("Найдено записей: %s. Хотите начать трансляцию имен?", positions.size()),
-                                "Подтвердите действие",
-                                JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-                            AtomicInteger translated = new AtomicInteger();
-                            AtomicInteger updated = new AtomicInteger();
-                            positions.forEach(p -> {
-                                try {
-                                    p.setName(p.getName());
-                                    translated.incrementAndGet();
-                                } catch (Exception e) {
-                                    Utils.getLogger().error("Не удалось транслировать запись: id=" + p.getId(), e);
-                                }
-                            });
-                            positions.forEach(p -> {
-                                try {
-                                    ServiceManager.getInstance().updatePosition(p);
-                                    updated.incrementAndGet();
-                                } catch (CommonException e) {
-                                    Utils.getLogger().error("Не удалось сохранить запись: id=" + p.getId(), e);
-                                }
-                            });
-                            JOptionPane.showMessageDialog(_this,
-                                    String.format("Транслировал: %s, сохранил: %s", translated.get(), updated.get())
-                            );
-                            initList();
-                        }
-                    }
-                } catch (CommonException e) {
-                    Utils.getLogger().error(e.getMessage(), e);
-                    blinkRed();
-                }
-            }
-        });
         filter.getActionMap().put("enterKey", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent ae) {
@@ -342,54 +269,66 @@ public class MainFrame extends JFrame {
             }
         });
         initTabs();
-
         setLocale(new Locale("RU"));
         pack();
-
         timer.start();
     }
-
     private void addTab(String s) {
         JList<PositionItem> list = newTabItems(s);
         tabs.put(s, list);
         list.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent evt) {
-                if (evt.getClickCount() == 2) {
+                if (evt.getClickCount() == 2 && list.getSelectedValue() != null) {
                     nameTF.setText(list.getSelectedValue().getName());
                 }
+            }
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showMenu(e);
+                }
+            }
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showMenu(e);
+                }
+            }
+            private void showMenu(MouseEvent e) {
+                if (list.getSelectedValue() == null) return;
+                String selectedTab = tabNames.get(tabbedPane.getSelectedIndex());
+                ListItemContextMenu cm = new ListItemContextMenu(
+                        tabNames.stream().filter(v -> !selectedTab.equals(v)).collect(Collectors.toList()),
+                        list.getSelectedValue()
+                );
+                cm.show(e.getComponent(), e.getX(), e.getY());
             }
         });
         list.getInputMap().put(KeyStroke.getKeyStroke("ctrl shift C"), "copyKey");
         list.getInputMap().put(KeyStroke.getKeyStroke("ctrl shift Q"), "showQR");
         list.getInputMap().put(KeyStroke.getKeyStroke("DELETE"), "delete");
-
         list.getActionMap().put("showQR", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent ae) {
-                int selectedIndex = tabbedPane.getSelectedIndex();
-                JList<PositionItem> list = tabs.get(selectedIndex);
+                JList<PositionItem> list = tabs.get(tabNames.get(tabbedPane.getSelectedIndex()));
                 PositionItem p = list.getSelectedValue();
                 if (p == null) return;
                 Map<EncodeHintType, Object> hintMap = new EnumMap<>(EncodeHintType.class);
                 hintMap.put(EncodeHintType.CHARACTER_SET, "UTF-8");
-
                 // Now with zxing version 3.2.1 you could change border size (white border size to just 1)
                 hintMap.put(EncodeHintType.MARGIN, 1); /* default = 4 */
                 hintMap.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.L);
-
                 QRCodeWriter qrCodeWriter = new QRCodeWriter();
                 try {
                     BitMatrix byteMatrix = qrCodeWriter.encode(p.getCode(), BarcodeFormat.QR_CODE, 200, 200, hintMap);
                     int w = byteMatrix.getWidth();
                     BufferedImage image = new BufferedImage(w, w, BufferedImage.TYPE_INT_RGB);
                     image.createGraphics();
-
                     Graphics2D graphics = (Graphics2D) image.getGraphics();
                     graphics.setColor(Color.WHITE);
                     graphics.fillRect(0, 0, w, w);
                     graphics.setColor(Color.BLACK);
-
                     for (int i = 0; i < w; i++) {
                         for (int j = 0; j < w; j++) {
                             if (byteMatrix.get(i, j)) {
@@ -397,24 +336,20 @@ public class MainFrame extends JFrame {
                             }
                         }
                     }
-
                     JLabel imgLabel = new JLabel();
                     imgLabel.setPreferredSize(new Dimension(200, 200));
                     ImageIcon ii = new ImageIcon();
                     ii.setImage(image);
                     imgLabel.setIcon(ii);
-
                     JDialog jd = new JDialog(_this, "QR Code", true);
                     jd.setLocationRelativeTo(_this);
                     jd.getContentPane().add(imgLabel);
                     jd.pack();
                     jd.setVisible(true);
-
                 } catch (Exception e) {
                     Utils.getLogger().error(e.getMessage(), e);
                     blinkRed();
                 }
-
             }
         });
         list.getActionMap().put("copyKey", new AbstractAction() {
@@ -450,37 +385,29 @@ public class MainFrame extends JFrame {
                 }
             }
         });
-
     }
-
     private void addLastTab() {
-        if (tabNames.size() > 5) return;
+        if (tabNames.size() >= TAB_MAXIMUM) return;
         tabbedPane.addTab("+", new JPanel());
     }
-
     private void initTabs() {
         tabs.clear();
         tabbedPane.removeAll();
         tabNames.forEach(this::addTab);
         addLastTab();
     }
-
     private void blinkRed() {
         filter.setBackground(Color.RED);
         blinkTimer.start();
     }
-
     private void blinkGreen() {
         filter.setBackground(Color.GREEN);
         blinkTimer.start();
     }
-
     private void initList() {
         try {
-            tabs.values().forEach(list -> list.setBackground(Color.WHITE));
             if (ServiceManager.isReady()) {
                 List<Position> positions = ServiceManager.getInstance().allPositions(null);
-
                 if (!ListUtil.isEmpty(positions)) {
                     List<PositionItem> items = positions.stream().map(PositionItem::new).collect(Collectors.toList());
                     Multimap<String, PositionItem> index = LinkedHashMultimap.create();
@@ -495,7 +422,6 @@ public class MainFrame extends JFrame {
                         tabNames.sort(String::compareTo);
                         initTabs();
                     }
-
                     for (String s : tabs.keySet()) {
                         Collection<PositionItem> positionList = index.get(s);
                         DefaultListModel<PositionItem> listModel = new DefaultListModel<>();
@@ -508,14 +434,12 @@ public class MainFrame extends JFrame {
             Utils.getLogger().error(e.getMessage(), e);
         }
     }
-
     private boolean passFilter(PositionItem p) {
         if (!StringUtil.isTrimmedEmpty(filter.getText())) {
             return p.getName().trim().toLowerCase().contains(filter.getText().trim().toLowerCase());
         }
         return true;
     }
-
     private void setStyle(JComponent c, Float fontSize, Integer padding, Integer width, Integer height) {
         if (fontSize != null) c.setFont(c.getFont().deriveFont(fontSize));
         if (padding != null)
@@ -528,12 +452,10 @@ public class MainFrame extends JFrame {
             c.setPreferredSize(new Dimension(w, h));
         }
     }
-
     private ImageIcon getImage(String path, int w, int h) {
         Image image = Toolkit.getDefaultToolkit().getImage(this.getClass().getResource(path));
         return new ImageIcon(image.getScaledInstance(w, h, java.awt.Image.SCALE_SMOOTH));
     }
-
     private JList<PositionItem> newTabItems(String title) {
         JList<PositionItem> l = new JList<>();
         JScrollPane scrollPane = new JScrollPane();
@@ -543,28 +465,23 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab(title, scrollPane);
         int index = tabbedPane.indexOfTab(title);
 
-
         JPanel pnlTab = new JPanel(new GridBagLayout());
         pnlTab.setOpaque(false);
         JLabel lblTitle = new JLabel(title);
         JLabel btnClose = new JLabel("×");
-        btnClose.setHorizontalAlignment(SwingConstants.CENTER);
+        btnClose.setHorizontalAlignment(SwingConstants.RIGHT);
         btnClose.setVerticalAlignment(SwingConstants.CENTER);
         btnClose.setForeground(Color.BLACK);
         btnClose.setPreferredSize(new Dimension(16, 12));
         btnClose.setFont(new Font("Serif", Font.BOLD, 14));
-
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 0;
         gbc.weightx = 1;
-
         pnlTab.add(lblTitle, gbc);
-
         gbc.gridx++;
         gbc.weightx = 0;
         pnlTab.add(btnClose, gbc);
-
         tabbedPane.setTabComponentAt(index, pnlTab);
         btnClose.addMouseListener(new ClickMouseListener() {
             @Override
@@ -580,14 +497,55 @@ public class MainFrame extends JFrame {
                         tabbedPane.setSelectedIndex(tabNames.size() - 1);
                         lastIndexTab = tabNames.size() - 1;
                     }
+                    if (tabNames.size() == TAB_MAXIMUM - 1) {
+                        addLastTab();
+                    }
                 }
             }
         });
-
         return l;
     }
-
     public SecretKey getSecretKey() {
         return secretKey;
+    }
+    private void renameTab() {
+        int lastIndexTab = tabbedPane.getSelectedIndex();
+        String oldName = tabNames.get(tabbedPane.getSelectedIndex());
+        String name = JOptionPane.showInputDialog(_this, "Введите новое имя", oldName);
+        if (!StringUtil.isTrimmedEmpty(name)) {
+            try {
+                if (ServiceManager.isReady())
+                    ServiceManager.getInstance().renameGroup(oldName, name);
+                tabNames.set(lastIndexTab, name);
+                initTabs();
+                initList();
+                tabbedPane.setSelectedIndex(lastIndexTab);
+            } catch (Exception e) {
+                Utils.getLogger().error(e.getMessage(), e);
+                blinkRed();
+            }
+        }
+    }
+    class ListItemContextMenu extends JPopupMenu {
+
+        public ListItemContextMenu(Collection<String> groups, PositionItem value) {
+            JMenuItem[] menuItems = new JMenuItem[groups.size()];
+            int i = 0;
+            for (String group : groups) {
+                menuItems[i] = new JMenuItem(group);
+                add(menuItems[i]);
+                menuItems[i].addActionListener(e -> {
+                    try {
+                        value.getPosition().setCategory(group);
+                        ServiceManager.getInstance().updatePosition(value.getPosition());
+                        initList();
+                    } catch (Exception ex) {
+                        Utils.getLogger().error(ex.getMessage(), ex);
+                        blinkRed();
+                    }
+                });
+                i++;
+            }
+        }
     }
 }
